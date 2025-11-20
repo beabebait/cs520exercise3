@@ -18,6 +18,6 @@ def separate_paren_groups(paren_string: str) -> List[str]:
             balance -= 1
         if balance == 0:
             result.append(current_group)
-            #current_group = ""
+            current_group = ""
     
     return result
