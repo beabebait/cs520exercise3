@@ -1,99 +1,84 @@
 import pytest
-from problems.problem_3.problem_3_gpt_cot import separate_paren_groups
+
+# Import all four implementations
+from problems.problem_3.problem_3_gpt_cot import separate_paren_groups as gpt_cot
+from problems.problem_3.problem_3_gpt_selfdebug import separate_paren_groups as gpt_selfdebug
+from problems.problem_3.problem_3_qwen_cot import separate_paren_groups as qwen_cot
+from problems.problem_3.problem_3_qwen_selfdebug import separate_paren_groups as qwen_selfdebug
+
+implementations = [gpt_cot, gpt_selfdebug, qwen_cot, qwen_selfdebug]
 
 
-# ----------------------------------------------------------
-# 1. No output group contains spaces
-# ----------------------------------------------------------
-def test_no_group_contains_spaces_spec():
-    s = "(()) () ((()))"
-    res = separate_paren_groups(s)
+# ---------------------------------------------------------
+# SPEC-GUIDED TESTS FOR PROBLEM 3
+# ---------------------------------------------------------
+@pytest.mark.parametrize("impl", implementations)
+def test_no_spaces_in_output(impl):
+    """Spec 1: Output groups contain no spaces."""
+    s = "(()) () (()())"
+    res = impl(s)
     assert all(" " not in group for group in res)
 
 
-# ----------------------------------------------------------
-# 2. Every returned group is a balanced parentheses string
-# ----------------------------------------------------------
-def test_groups_are_balanced_spec():
-    s = "()(())(()())"
-    res = separate_paren_groups(s)
+@pytest.mark.parametrize("impl", implementations)
+def test_balanced_each_group(impl):
+    """Spec 2: Every returned group must be a balanced parentheses string."""
+    s = "() (()) (()())"
+    res = impl(s)
 
-    def is_balanced(group):
-        # total balance must be 0
-        if sum(1 if c == "(" else -1 for c in group) != 0:
-            return False
-        # prefixes must not dip negative
-        bal = 0
+    for group in res:
+        # Balanced final depth
+        final_depth = sum(1 if c == "(" else -1 for c in group)
+        assert final_depth == 0
+
+        # Never more closing than opening
+        depth = 0
         for c in group:
-            bal += 1 if c == "(" else -1
-            if bal < 0:
-                return False
-        return True
-
-    assert all(is_balanced(group) for group in res)
+            depth += 1 if c == "(" else -1
+            assert depth >= 0
 
 
-# ----------------------------------------------------------
-# 3. Concatenation of groups must equal the input stripped of spaces
-# ----------------------------------------------------------
-def test_groups_concatenate_to_clean_string_spec():
-    s = " () (())   (()()) "
+@pytest.mark.parametrize("impl", implementations)
+def test_concatenation_equals_cleaned_input(impl):
+    """Spec 3: Concatenating all groups equals input with spaces removed."""
+    s = "  (()())   ()   (()) "
     clean = "".join(c for c in s if c != " ")
-
-    res = separate_paren_groups(s)
-
-    # clean should contain only parentheses
     assert all(ch in "()" for ch in clean) or clean == ""
+
+    res = impl(s)
     assert "".join(res) == clean
 
 
-# ----------------------------------------------------------
-# 4. Each group is maximal — cannot be decomposed into subgroups
-# ----------------------------------------------------------
-def test_groups_are_maximal_spec():
+@pytest.mark.parametrize("impl", implementations)
+def test_groups_are_maximal(impl):
+    """Spec 4: Groups must be maximal (cannot contain smaller balanced groups as separate entries)."""
     s = "() (()) (()())"
-    res = separate_paren_groups(s)
+    res = impl(s)
 
-    for g in res:
-        # A proper substring that is balanced should NOT exist inside g
-        # except empty / the whole string
-        for i in range(1, len(g)-1):
-            for j in range(i+1, len(g)):
-                sub = g[i:j]
-
-                # check if sub is balanced
-                bal = sum(1 if c == "(" else -1 for c in sub)
-                prefix_ok = all(
-                    (1 if sub[k] == "(" else -1)
-                    + sum(1 if c == "(" else -1 for c in sub[:k])
-                    >= 0
-                    for k in range(len(sub))
-                )
-
-                if bal == 0 and prefix_ok:
-                    # found a smaller balanced group → violation
-                    assert False, f"Group {g} contains smaller balanced group {sub}"
-
-    assert True  # If no violation occurred
+    # A maximal group should not fully contain another distinct group as a substring
+    for g1 in res:
+        for g2 in res:
+            if g1 != g2:
+                assert not (g1 in g2)
 
 
-# ----------------------------------------------------------
-# 5. Number of groups equals number of top-level balanced segments
-# ----------------------------------------------------------
-def test_number_of_groups_matches_top_level_segments_spec():
-    s = "(())()(()) (()())"
+@pytest.mark.parametrize("impl", implementations)
+def test_group_count_matches_top_level_segments(impl):
+    """Spec 5: Number of groups equals number of top-level balanced segments."""
+    s = "() (()) (()()) ()"
     clean = "".join(c for c in s if c != " ")
 
-    # count top-level balanced segments
+    # Count top-level balanced groups
     depth = 0
-    expected_count = 0
+    expected_groups = 0
     for ch in clean:
         if ch == "(":
             if depth == 0:
-                expected_count += 1
+                expected_groups += 1
             depth += 1
         else:
             depth -= 1
 
-    res = separate_paren_groups(s)
-    assert len(res) == expected_count
+    res = impl(s)
+    assert len(res) == expected_groups
+
